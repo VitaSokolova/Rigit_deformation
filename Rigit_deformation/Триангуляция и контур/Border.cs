@@ -4,13 +4,16 @@ using System.Drawing;
 
 namespace Rigit_deformation.Триангуляция_и_контур
 {
+    using System.Diagnostics.CodeAnalysis;
+    using System.Linq;
+
     /// <summary>
     /// The border
     /// </summary>
     public class Border
     {
         public List<Point> ExactPointsList;
-        public List<Point> ShortPointsList; 
+        public List<Point> ShortPointsList;
 
         private Bitmap _bitmapFromImage;
 
@@ -21,63 +24,112 @@ namespace Rigit_deformation.Триангуляция_и_контур
             this.ShortPointsList = this.ShortCutBorder();
         }
 
+
         private List<Point> GetBorder()
         {
-            List<Point> leftBorder = new List<Point>();
-            List<Point> rightBorder = new List<Point>();
-            int startX = -1;
-            bool find = false;
+            // флажок, указывающий движется обход контура вниз или вверх
+            bool down = true;
 
-            for (int y = 0; y < this._bitmapFromImage.Height; y++)
-                for (int x = 0; x < this._bitmapFromImage.Width; x++)
+            // флажок, указывающий движется обход контура влево или вправо
+            bool left = true;
+
+            List<Point> borderPoints = new List<Point>();
+            Point firstPoint = this.findFirst();
+            Point previousPoint = firstPoint;
+            Point nextPoint = firstPoint;
+
+            do
+            {
+                borderPoints.Add(nextPoint);
+                this._bitmapFromImage.SetPixel(nextPoint.X, nextPoint.Y, Color.Red);
+                previousPoint = nextPoint;
+
+                nextPoint = this.findNeighbour(previousPoint, firstPoint, down);
+
+                down = nextPoint.Y >= previousPoint.Y;
+            }
+            while (!firstPoint.Equals(nextPoint) && nextPoint.X != -1 && nextPoint.Y != -1);
+
+            return borderPoints;
+        }
+
+        private Point findFirst()
+        {
+            Point firstPoint = new Point();
+
+            for (int y = 0; y < this._bitmapFromImage.Height-1; y++)
+                for (int x = 0; x < this._bitmapFromImage.Width-1; x++)
                 {
-                    if (this._bitmapFromImage.GetPixel(x, y).A == 0) continue;
-                    // пиксель закрашен
-                    else
+                    if (this._bitmapFromImage.GetPixel(x, y).A != 0)
                     {
-                        // он на границе картинки
-                        if ((x == 0) || (y == 0) || (x == this._bitmapFromImage.Width - 1) || (y == this._bitmapFromImage.Height - 1))
-                        {
-                            if (find == false)
-                            {
-                                startX = x;
-                                find = true;
-                            }
+                        firstPoint.X = x;
+                        firstPoint.Y = y;
+                        return firstPoint;
+                    }
 
-                            if (x < startX) leftBorder.Add(new Point(x, y));
-                            else rightBorder.Add(new Point(x, y));
-                            continue;
-                        }
-                        else
-                        // закрашен, но не на границе картинки
-                        {
-                            if (find == false)
-                            {
-                                startX = x; find = true;
-                            }
+                }
+            firstPoint.X = -1;
+            firstPoint.Y = -1;
+            return firstPoint;
+        }
 
-                            if (isBorder(x, y))
-                            {
-                                if (x < startX) leftBorder.Add(new Point(x, y));
-                                else rightBorder.Add(new Point(x, y));
-                            }
-                        }
+        private Point findNeighbour(Point p, Point firstPoint, bool down)
+        {
+            List<Point> neighBorderPoints = new List<Point>();
+
+            for (int y = p.Y - 1; y <= p.Y + 1; y++)
+                for (int x = p.X - 1; x <= p.X + 1; x++)
+                {
+                    if ((x == p.X) && (y == p.Y)) continue;
+
+                    if ((isBorder(x,y))&&(this._bitmapFromImage.GetPixel(x,y).R !=255)||((firstPoint.X==x) && (firstPoint.Y==y)))
+                    {
+                        neighBorderPoints.Add(new Point(x, y));
                     }
                 }
-            rightBorder.Reverse();
-            leftBorder.AddRange(rightBorder);
-            return leftBorder;
+
+            if (neighBorderPoints.Count == 1)
+            {
+                return neighBorderPoints[0];
+            }
+            // если соседей много
+            else
+            {
+                List<Point> sortNeighBorderPoints = new List<Point>();
+
+                if (down)
+                {
+                    // по минимальному Х и максимальному Y
+                    sortNeighBorderPoints =
+                       neighBorderPoints.OrderBy(t => t.X).ThenByDescending(t => t.Y).ToList();
+                }
+                else
+                {
+                    // по максимальному Х и минимальному Y
+                    sortNeighBorderPoints =
+                       neighBorderPoints.OrderByDescending(t => t.X).ThenBy(t => t.Y).ToList();
+                }
+                return sortNeighBorderPoints[0];
+            }
         }
 
         private bool isBorder(int x, int y)
         {
-            if ((this._bitmapFromImage.GetPixel(x, y - 1).A > 0) && (this._bitmapFromImage.GetPixel(x, y + 1).A > 0)
-                && (this._bitmapFromImage.GetPixel(x - 1, y).A > 0) && (this._bitmapFromImage.GetPixel(x + 1, y).A > 0))
+            if ((x == this._bitmapFromImage.Width-1) || (x == 0) || (y == this._bitmapFromImage.Height-1) || (y == 0))
             {
-                return false;
+                return (this._bitmapFromImage.GetPixel(x, y).A > 0);
             }
+            else
+            {
+                // если пиксель не на границе изображения в целом
 
-            return true;
+                if ((this._bitmapFromImage.GetPixel(x, y - 1).A > 0) && (this._bitmapFromImage.GetPixel(x, y + 1).A > 0)
+                    && (this._bitmapFromImage.GetPixel(x - 1, y).A > 0) && (this._bitmapFromImage.GetPixel(x + 1, y).A > 0))
+                {
+                    return false;
+                }
+            }
+            return this._bitmapFromImage.GetPixel(x, y).A > 0;
         }
 
         public void DrawExactBorder(Graphics g)
@@ -90,8 +142,8 @@ namespace Rigit_deformation.Триангуляция_и_контур
 
         private List<Point> ShortCutBorder()
         {
-            List <Point> shortList = new List<Point>();
-            for (int i  = 0; i  < this.ExactPointsList.Count; i+=10)
+            List<Point> shortList = new List<Point>();
+            for (int i = 0; i < this.ExactPointsList.Count; i += 30)
             {
                 shortList.Add(this.ExactPointsList[i]);
             }
@@ -99,10 +151,11 @@ namespace Rigit_deformation.Триангуляция_и_контур
         }
         public void DrawShortCutBorder(Graphics g)
         {
-            for (int i = 0; i < this.ShortPointsList.Count-1; i++)
+            for (int i = 0; i < this.ShortPointsList.Count - 1; i++)
             {
-                g.DrawLine(Pens.Red, this.ShortPointsList[i].X, this.ShortPointsList[i].Y, this.ShortPointsList[i+1].X, this.ShortPointsList[i+1].Y);
+                g.DrawLine(Pens.Red, this.ShortPointsList[i].X, this.ShortPointsList[i].Y, this.ShortPointsList[i + 1].X, this.ShortPointsList[i + 1].Y);
             }
         }
+
     }
 }
