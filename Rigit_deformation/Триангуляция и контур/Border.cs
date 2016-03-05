@@ -4,8 +4,10 @@ using System.Drawing;
 
 namespace Rigit_deformation.Триангуляция_и_контур
 {
+    using System;
     using System.Diagnostics.CodeAnalysis;
     using System.Linq;
+    using System.Windows.Forms;
 
     /// <summary>
     /// The border
@@ -48,7 +50,7 @@ namespace Rigit_deformation.Триангуляция_и_контур
 
                 down = nextPoint.Y >= previousPoint.Y;
             }
-            while (!firstPoint.Equals(nextPoint) && nextPoint.X != -1 && nextPoint.Y != -1);
+            while (!firstPoint.Equals(nextPoint));
 
             return borderPoints;
         }
@@ -68,8 +70,11 @@ namespace Rigit_deformation.Триангуляция_и_контур
                     }
 
                 }
-            firstPoint.X = -1;
-            firstPoint.Y = -1;
+
+            if (firstPoint.IsEmpty)
+            {
+                throw new FirstPointNotFoundException("Первая закрашенная точка не была найдена");
+            }
             return firstPoint;
         }
 
@@ -80,14 +85,17 @@ namespace Rigit_deformation.Триангуляция_и_контур
             for (int y = p.Y - 1; y <= p.Y + 1; y++)
                 for (int x = p.X - 1; x <= p.X + 1; x++)
                 {
-                    if ((x == p.X) && (y == p.Y)) continue;
+                    if (((x == p.X) && (y == p.Y))||((x<0)||(y<0))||(x>=this._bitmapFromImage.Width)||(y>=this._bitmapFromImage.Height)) continue;
 
                     if ((isBorder(x,y))&&(this._bitmapFromImage.GetPixel(x,y).R !=255)||((firstPoint.X==x) && (firstPoint.Y==y)))
                     {
                         neighBorderPoints.Add(new Point(x, y));
                     }
                 }
-
+            if (neighBorderPoints.Count == 0)
+                throw new FirstPointNotFoundException(
+                    "Не была найдена соседняя точка для точки Х = " + Convert.ToString(p.X) + " Y = "
+                    + Convert.ToString(p.Y));
             if (neighBorderPoints.Count == 1)
             {
                 return neighBorderPoints[0];
